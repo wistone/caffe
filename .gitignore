@@ -54,6 +54,7 @@
 
 # User's build configuration
 Makefile.config
+bashrc
 
 # Data and models are either
 # 1. reference, and not casually committed
