@@ -929,6 +929,7 @@ message V1LayerParameter {
     CONTRASTIVE_LOSS = 37;
     CONVOLUTION = 4;
     DATA = 5;
+    DOUBLE_OUTPUT_DATA = 44;
     DECONVOLUTION = 39;
     DROPOUT = 6;
     DUMMY_DATA = 32;
