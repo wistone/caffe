@@ -122,6 +122,7 @@ class DoubleOutputDataLayer : public BasePrefetchingDataLayer<Dtype> {
 
   shared_ptr<db::DB> db_;
   shared_ptr<db::Cursor> cursor_;
+  Blob<Dtype> prefetch_label_second_;
 };
 
 /**

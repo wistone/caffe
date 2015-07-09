@@ -59,6 +59,7 @@ void DoubleOutputDataLayer<Dtype>::DataLayerSetUp(const vector<Blob<Dtype>*>& bo
     top[1]->Reshape(label_shape);
     top[2]->Reshape(label_shape);
     this->prefetch_label_.Reshape(label_shape);
+    this->prefetch_label_second_.Reshape(label_shape);
   }
 }
 
@@ -91,7 +92,7 @@ void DoubleOutputDataLayer<Dtype>::InternalThreadEntry() {
 
   if (this->output_labels_) {
     top_label = this->prefetch_label_.mutable_cpu_data();
-    top_label_second = this->prefetch_label_.mutable_cpu_data();
+    top_label_second = this->prefetch_label_second_.mutable_cpu_data();
   }
   timer.Start();
   for (int item_id = 0; item_id < batch_size; ++item_id) {
@@ -109,7 +110,6 @@ void DoubleOutputDataLayer<Dtype>::InternalThreadEntry() {
       top_label[item_id] = datum.label();
       top_label_second[item_id] = datum.label_second();
     }
-    LOG(INFO) << top_label[item_id] << " " << top_label_second[item_id];
     trans_time += timer.MicroSeconds();
     timer.Start();
     // go to the next item.
