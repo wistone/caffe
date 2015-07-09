@@ -156,6 +156,7 @@ bool ReadImageToDatum(const string& filename, const int label, const int label_s
     }
     CVMatToDatum(cv_img, datum);
     datum->set_label(label);
+    datum->set_label_second(label_scene);
     return true;
   } else {
     return false;
