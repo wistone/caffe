@@ -92,3 +92,6 @@ LOCK
 LOG*
 CURRENT
 MANIFEST-*
+
+# others
+log.txt
