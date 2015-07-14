@@ -41,8 +41,8 @@ GLOG_logtostderr=1 $TOOLS/convert_huawei_image \
     --resize_width=$RESIZE_WIDTH \
     --shuffle \
     $TRAIN_DATA_ROOT \
-    $DATA/train_4.txt \
-    $EXAMPLE/huawei_train_4_lmdb
+    $DATA/train_6.txt \
+    $EXAMPLE/huawei_train_6_lmdb
 
 echo "Creating val lmdb..."
 
@@ -51,7 +51,18 @@ GLOG_logtostderr=1 $TOOLS/convert_huawei_image \
     --resize_width=$RESIZE_WIDTH \
     --shuffle \
     $VAL_DATA_ROOT \
-    $DATA/val_4.txt \
-    $EXAMPLE/huawei_val_4_lmdb
+    $DATA/val_6.txt \
+    $EXAMPLE/huawei_val_6_lmdb
+
+
+echo "Creating test lmdb..."
+
+# GLOG_logtostderr=1 $TOOLS/convert_huawei_image \
+#     --resize_height=$RESIZE_HEIGHT \
+#     --resize_width=$RESIZE_WIDTH \
+#     --shuffle \
+#     $VAL_DATA_ROOT \
+#     $DATA/test2_4.txt \
+#     $EXAMPLE/huawei_test2_4_lmdb
 
 echo "Done."
