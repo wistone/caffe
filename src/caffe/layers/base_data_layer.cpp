@@ -17,8 +17,13 @@ void BaseDataLayer<Dtype>::LayerSetUp(const vector<Blob<Dtype>*>& bottom,
       const vector<Blob<Dtype>*>& top) {
   if (top.size() == 1) {
     output_labels_ = false;
-  } else {
+    output_labels_second_ = false;
+  } else if (top.size() == 2){
     output_labels_ = true;
+    output_labels_second_ = false;
+  } else if (top.size() == 3){
+    output_labels_ = true;
+    output_labels_second_ = true;    
   }
   data_transformer_.reset(
       new DataTransformer<Dtype>(transform_param_, this->phase_));
@@ -73,6 +78,13 @@ void BasePrefetchingDataLayer<Dtype>::Forward_cpu(
     // Copy the labels.
     caffe_copy(prefetch_label_.count(), prefetch_label_.cpu_data(),
                top[1]->mutable_cpu_data());
+  }
+  if (this->output_labels_second_) {
+    // Reshape to loaded labels.
+    top[2]->ReshapeLike(prefetch_label_second_);
+    // Copy the labels.
+    caffe_copy(prefetch_label_second_.count(), prefetch_label_second_.cpu_data(),
+               top[2]->mutable_cpu_data());
   }
   // Start a new prefetch thread
   DLOG(INFO) << "CreatePrefetchThread";

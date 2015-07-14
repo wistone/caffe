@@ -48,6 +48,7 @@ class BaseDataLayer : public Layer<Dtype> {
   TransformationParameter transform_param_;
   shared_ptr<DataTransformer<Dtype> > data_transformer_;
   bool output_labels_;
+  bool output_labels_second_;
 };
 
 template <typename Dtype>
@@ -76,6 +77,7 @@ class BasePrefetchingDataLayer :
   Blob<Dtype> prefetch_data_;
   Blob<Dtype> prefetch_label_;
   Blob<Dtype> transformed_data_;
+  Blob<Dtype> prefetch_label_second_;
 };
 
 template <typename Dtype>
@@ -122,7 +124,6 @@ class DoubleOutputDataLayer : public BasePrefetchingDataLayer<Dtype> {
 
   shared_ptr<db::DB> db_;
   shared_ptr<db::Cursor> cursor_;
-  Blob<Dtype> prefetch_label_second_;
 };
 
 /**
