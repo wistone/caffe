@@ -78,6 +78,7 @@ void DoubleOutputImageDataLayer<Dtype>::DataLayerSetUp(const vector<Blob<Dtype>*
   // label
   vector<int> label_shape(1, batch_size);
   top[1]->Reshape(label_shape);
+  top[2]->Reshape(label_shape);
   this->prefetch_label_.Reshape(label_shape);
   this->prefetch_label_second_.Reshape(label_shape);
 }
