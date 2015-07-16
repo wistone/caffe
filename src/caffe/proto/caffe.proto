@@ -942,6 +942,7 @@ message V1LayerParameter {
     HINGE_LOSS = 28;
     IM2COL = 11;
     IMAGE_DATA = 12;
+    DOUBLE_OUTPUT_IMAGE_DATA = 45;
     INFOGAIN_LOSS = 13;
     INNER_PRODUCT = 14;
     LRN = 15;
