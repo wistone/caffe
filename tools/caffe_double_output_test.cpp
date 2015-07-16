@@ -4,6 +4,7 @@
 #include <map>
 #include <string>
 #include <vector>
+#include <climits> 
 
 #include "boost/algorithm/string.hpp"
 #include "caffe/caffe.hpp"
@@ -16,9 +17,12 @@ using caffe::shared_ptr;
 using caffe::Timer;
 using caffe::vector;
 
+const int MIN_PROB = -100;
 
 DEFINE_int32(gpu, -1,
     "Run in GPU mode on given device ID.");
+DEFINE_int32(ignore, 1,
+    "Run whether to ignore the ignore label.");
 DEFINE_string(solver, "",
     "The solver definition protocol buffer text file.");
 DEFINE_string(model, "",
@@ -28,8 +32,8 @@ DEFINE_string(snapshot, "",
 DEFINE_string(weights, "",
     "Optional; the pretrained weights to initialize finetuning. "
     "Cannot be set simultaneously with snapshot.");
-DEFINE_int32(iterations, 50,
-    "The number of iterations to run.");
+DEFINE_string(datadir, "/media/Data/huawei/hw_photo_cls/meta/test_ignore_6.txt",
+    "Input test data file.");
 
 // A simple registry for caffe commands.
 typedef int (*BrewFunction)();
@@ -75,10 +79,43 @@ void CopyLayers(caffe::Solver<float>* solver, const std::string& model_list) {
   }
 }
 
+const char *object_name[] = {"animal", "plant", "food", "traffic", "landscape", "portrait", "others"};
+std::vector<std::string> object_name_dict(object_name, object_name + 7);
+
+const char *scene_name[] = {"indoor", "outdoor", "others"};
+std::vector<std::string> scene_name_dict(scene_name, scene_name + 3);
+
+void print_test_score(const std::string& str, const int gt_label, const int pred_label, vector<float> score, bool isobject){
+  std::vector<std::string> dict;
+  if (isobject){
+    dict = object_name_dict;
+  } else {
+    dict = scene_name_dict;
+  }
+  std::cout << str << std::endl;
+  std::cout << "------TRUE LABEL: " << dict[gt_label] << " \t PREDICT LABEL: " \
+      << dict[pred_label] << "----------" << std::endl;
+  for (int i = 0; i < score.size(); i++){
+    std::cout << dict[i] << " " << score[i] << std::endl;
+  }
+}
+
 // Test: score a model.
 int test() {
   CHECK_GT(FLAGS_model.size(), 0) << "Need a model definition to score.";
   CHECK_GT(FLAGS_weights.size(), 0) << "Need model weights to score.";
+  CHECK_GT(FLAGS_datadir.size(), 0) << "Need data path to test.";
+
+  LOG(INFO) << "Opening file " << FLAGS_datadir;
+  std::ifstream infile(FLAGS_datadir.c_str());
+  vector<std::pair<std::string, std::pair<int, int> > > lines;
+  std::string filename;
+  int label;
+  int label_second;
+  while (infile >> filename >> label >> label_second) {
+    lines.push_back(std::make_pair(filename, std::make_pair(label, label_second)));
+  }
+  int iterations = lines.size();
 
   // Set device id and mode
   if (FLAGS_gpu >= 0) {
@@ -92,58 +129,71 @@ int test() {
   // Instantiate the caffe net.
   Net<float> caffe_net(FLAGS_model, caffe::TEST);
   caffe_net.CopyTrainedLayersFrom(FLAGS_weights);
-  LOG(INFO) << "Running for " << FLAGS_iterations << " iterations.";
+  LOG(INFO) << "Running for " << iterations << " iterations.";
 
   vector<Blob<float>* > bottom_vec;
-  vector<int> test_score_output_id;
   vector<float> test_score;
-  float loss = 0;
   vector<float> loss_with_ignore_label (4, 0.0);
   vector<float> loss_with_ignore_label_count (4, 0);
-  for (int i = 0; i < FLAGS_iterations; ++i) {
+
+  float accuracy_object = 0;
+  float count_object = 0;
+  float accuracy_scene = 0;
+  float count_scene = 0;
+  for (int i = 0; i < iterations; ++i) {
     float iter_loss;
     const vector<Blob<float>*>& result =
         caffe_net.Forward(bottom_vec, &iter_loss);
-    int idx = 0;
-    for (int j = 0; j < result.size(); ++j) {
-      const float* result_vec = result[j]->cpu_data();
-      for (int k = 0; k < result[j]->count(); ++k, ++idx) {
-        const float score = result_vec[k];
-        if (test_score.size() == 0) {
-          test_score.push_back(score);
-          test_score_output_id.push_back(j);
-        } else {
-          test_score[idx] += score;
+    
+    test_score.clear();
+    const float* prob_object_vec = result[0]->cpu_data();
+    float max_prob = MIN_PROB;
+    int max_label = -1;
+    for (int j = 0; j < result[0]->count(); j++){
+      const float score = prob_object_vec[j];
+      test_score.push_back(score);
+      if (!isnan(score)){
+        if (score > max_prob){
+          max_prob = score;
+          max_label = j;
         }
-        if (!isnan(score)){
-          loss_with_ignore_label[j] += score;
-          loss_with_ignore_label_count[j] += 1;
-        }
-        const std::string& output_name = caffe_net.blob_names()[
-            caffe_net.output_blob_indices()[j]];
-        LOG(INFO) << "Batch " << i << ", " << output_name << " = " << score;
       }
     }
-  }
-  loss /= FLAGS_iterations;
-  LOG(INFO) << "Loss: " << loss;
-  for (int i = 0; i < test_score.size(); ++i) {
-    const std::string& output_name = caffe_net.blob_names()[
-        caffe_net.output_blob_indices()[test_score_output_id[i]]];
-    const float loss_weight = caffe_net.blob_loss_weights()[
-        caffe_net.output_blob_indices()[test_score_output_id[i]]];
-    std::ostringstream loss_msg_stream;
-    const float mean_score = test_score[i] / FLAGS_iterations;
-    if (loss_weight) {
-      loss_msg_stream << " (* " << loss_weight
-                      << " = " << loss_weight * mean_score << " loss)";
+    if ( (FLAGS_ignore) & (lines[i].second.first != -1) ) {
+      count_object += 1;      
+      if (max_label == lines[i].second.first){
+        accuracy_object += 1;       
+      } else {
+        print_test_score(lines[i].first, lines[i].second.first, max_label, test_score, true);
+      }  
     }
-    LOG(INFO) << output_name << " = " << mean_score << loss_msg_stream.str();
+
+    test_score.clear();
+    const float* prob_scene_vec = result[1]->cpu_data();
+    max_prob = MIN_PROB;
+    max_label = -1;
+    for (int j = 0; j < result[1]->count(); j++){
+      const float score = prob_scene_vec[j];
+      test_score.push_back(score);
+      if (!isnan(score)){
+        if (score > max_prob){
+          max_prob = score;
+          max_label = j;
+        }
+      }
+    }
+    if ( (FLAGS_ignore) & (lines[i].second.second != -1) ) {
+      count_scene += 1;      
+      if (max_label == lines[i].second.second){
+        accuracy_scene += 1;       
+      } else {
+        print_test_score(lines[i].first, lines[i].second.second, max_label, test_score, false);
+      }  
+    }
   }
 
-  for (int i = 0; i < loss_with_ignore_label.size(); i++){
-    LOG(INFO) << "Loss " << i << " " << loss_with_ignore_label[i] / loss_with_ignore_label_count[i] * 1.0;
-  }
+  LOG(INFO) << "Object accuracy: " << accuracy_object / count_object * 1.0 << " " << accuracy_object << " " << count_object;
+  LOG(INFO) << "Scene accuracy: " << accuracy_scene / count_scene * 1.0 << " " << accuracy_scene << " " << count_scene;
 
   return 0;
 }
