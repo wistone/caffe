@@ -4,6 +4,7 @@
 #include <map>
 #include <string>
 #include <vector>
+#include <sstream> 
 #include <climits> 
 
 #include "boost/algorithm/string.hpp"
@@ -32,8 +33,6 @@ DEFINE_string(snapshot, "",
 DEFINE_string(weights, "",
     "Optional; the pretrained weights to initialize finetuning. "
     "Cannot be set simultaneously with snapshot.");
-DEFINE_string(datadir, "/media/Data/huawei/hw_photo_cls/meta/test_ignore_6.txt",
-    "Input test data file.");
 
 // A simple registry for caffe commands.
 typedef int (*BrewFunction)();
@@ -104,10 +103,26 @@ void print_test_score(const std::string& str, const int gt_label, const int pred
 int test() {
   CHECK_GT(FLAGS_model.size(), 0) << "Need a model definition to score.";
   CHECK_GT(FLAGS_weights.size(), 0) << "Need model weights to score.";
-  CHECK_GT(FLAGS_datadir.size(), 0) << "Need data path to test.";
 
-  LOG(INFO) << "Opening file " << FLAGS_datadir;
-  std::ifstream infile(FLAGS_datadir.c_str());
+  // Parse source file from prototxt
+  std::ifstream infile_model(FLAGS_model.c_str());
+  std::string temp_line;
+  std::string buffer;
+  std::string data_dir;
+  while (std::getline(infile_model, temp_line)){
+    std::stringstream ss(temp_line);
+    ss >> buffer;
+    if (buffer.compare(0, 6, "source") == 0){
+      ss >> data_dir;
+      break;
+    }
+  }
+  CHECK_GT(data_dir.size(), 0) << "No data path found in prototxt.";
+
+  // Parse interation number from data source
+  LOG(INFO) << "Opening file " << data_dir;
+  data_dir = data_dir.substr(1, data_dir.size() - 2);
+  std::ifstream infile(data_dir.c_str());
   vector<std::pair<std::string, std::pair<int, int> > > lines;
   std::string filename;
   int label;
@@ -126,6 +141,7 @@ int test() {
     LOG(INFO) << "Use CPU.";
     Caffe::set_mode(Caffe::CPU);
   }
+
   // Instantiate the caffe net.
   Net<float> caffe_net(FLAGS_model, caffe::TEST);
   caffe_net.CopyTrainedLayersFrom(FLAGS_weights);
@@ -133,13 +149,16 @@ int test() {
 
   vector<Blob<float>* > bottom_vec;
   vector<float> test_score;
-  vector<float> loss_with_ignore_label (4, 0.0);
-  vector<float> loss_with_ignore_label_count (4, 0);
 
   float accuracy_object = 0;
   float count_object = 0;
   float accuracy_scene = 0;
   float count_scene = 0;
+  vector<float> accuracy_object_vector (7, 0.0);
+  vector<float> count_object_vector (7, 0.0);
+  vector<float> accuracy_scene_vector (3, 0.0);
+  vector<float> count_scene_vector (3, 0.0);
+
   for (int i = 0; i < iterations; ++i) {
     float iter_loss;
     const vector<Blob<float>*>& result =
@@ -161,8 +180,10 @@ int test() {
     }
     if ( (FLAGS_ignore) & (lines[i].second.first != -1) ) {
       count_object += 1;      
+      count_object_vector[lines[i].second.first] += 1;
       if (max_label == lines[i].second.first){
         accuracy_object += 1;       
+        accuracy_object_vector[lines[i].second.first] += 1;       
       } else {
         print_test_score(lines[i].first, lines[i].second.first, max_label, test_score, true);
       }  
@@ -184,8 +205,10 @@ int test() {
     }
     if ( (FLAGS_ignore) & (lines[i].second.second != -1) ) {
       count_scene += 1;      
+      count_scene_vector[lines[i].second.second] += 1;
       if (max_label == lines[i].second.second){
         accuracy_scene += 1;       
+        accuracy_scene_vector[lines[i].second.second] += 1;       
       } else {
         print_test_score(lines[i].first, lines[i].second.second, max_label, test_score, false);
       }  
@@ -194,6 +217,15 @@ int test() {
 
   LOG(INFO) << "Object accuracy: " << accuracy_object / count_object * 1.0 << " " << accuracy_object << " " << count_object;
   LOG(INFO) << "Scene accuracy: " << accuracy_scene / count_scene * 1.0 << " " << accuracy_scene << " " << count_scene;
+  LOG(INFO) << " " ;
+  for (int i = 0; i < 6; i++){
+    LOG(INFO) << object_name_dict[i] << " accuracy: " << accuracy_object_vector[i] / 
+        count_object_vector[i] * 1.0 << " " << accuracy_object_vector[i] << " " << count_object_vector[i];
+  }
+  for (int i = 0; i < 2; i++){
+    LOG(INFO) << scene_name_dict[i] << " accuracy: " << accuracy_scene_vector[i] / 
+        count_scene_vector[i] * 1.0 << " " << accuracy_scene_vector[i] << " " << count_scene_vector[i];
+  }
 
   return 0;
 }
