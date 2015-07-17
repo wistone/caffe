@@ -78,13 +78,14 @@ void CopyLayers(caffe::Solver<float>* solver, const std::string& model_list) {
   }
 }
 
-const char *object_name[] = {"animal", "plant", "food", "traffic", "landscape", "portrait", "others"};
+const char *object_name[] = {"animal\t", "plant\t", "food\t", "traffic\t", "landscape", "portrait", "others\t"};
 std::vector<std::string> object_name_dict(object_name, object_name + 7);
 
-const char *scene_name[] = {"indoor", "outdoor", "others"};
+const char *scene_name[] = {"indoor\t", "outdoor\t", "others\t"};
 std::vector<std::string> scene_name_dict(scene_name, scene_name + 3);
 
-void print_test_score(const std::string& str, const int gt_label, const int pred_label, vector<float> score, bool isobject){
+void print_test_score(const std::string& str, const int gt_label, 
+      const int pred_label, vector<float> score, bool isobject){
   std::vector<std::string> dict;
   if (isobject){
     dict = object_name_dict;
@@ -101,6 +102,7 @@ void print_test_score(const std::string& str, const int gt_label, const int pred
 
 // Test: score a model.
 int test() {
+  srand(0);
   CHECK_GT(FLAGS_model.size(), 0) << "Need a model definition to score.";
   CHECK_GT(FLAGS_weights.size(), 0) << "Need model weights to score.";
 
@@ -154,6 +156,11 @@ int test() {
   float count_object = 0;
   float accuracy_scene = 0;
   float count_scene = 0;
+  float accuracy_ignore_scene = 0;
+  float accuracy_ignore_object = 0;
+  float count_ignore_scene = 0;
+  float count_ignore_object = 0;
+
   vector<float> accuracy_object_vector (7, 0.0);
   vector<float> count_object_vector (7, 0.0);
   vector<float> accuracy_scene_vector (3, 0.0);
@@ -178,6 +185,22 @@ int test() {
         }
       }
     }
+
+    test_score.clear();
+    const float* prob_scene_vec = result[1]->cpu_data();
+    float max_prob_scene = MIN_PROB;
+    float max_label_scene = -1;
+    for (int j = 0; j < result[1]->count(); j++){
+      const float score = prob_scene_vec[j];
+      test_score.push_back(score);
+      if (!isnan(score)){
+        if (score > max_prob_scene){
+          max_prob_scene = score;
+          max_label_scene = j;
+        }
+      }
+    }
+
     if ( (FLAGS_ignore) & (lines[i].second.first != -1) ) {
       count_object += 1;      
       count_object_vector[lines[i].second.first] += 1;
@@ -187,45 +210,50 @@ int test() {
       } else {
         print_test_score(lines[i].first, lines[i].second.first, max_label, test_score, true);
       }  
-    }
-
-    test_score.clear();
-    const float* prob_scene_vec = result[1]->cpu_data();
-    max_prob = MIN_PROB;
-    max_label = -1;
-    for (int j = 0; j < result[1]->count(); j++){
-      const float score = prob_scene_vec[j];
-      test_score.push_back(score);
-      if (!isnan(score)){
-        if (score > max_prob){
-          max_prob = score;
-          max_label = j;
+      if (lines[i].second.second == -1){
+        count_ignore_scene += 1;
+        if (max_label_scene == 2){
+          accuracy_ignore_scene += 1;
         }
       }
     }
     if ( (FLAGS_ignore) & (lines[i].second.second != -1) ) {
       count_scene += 1;      
       count_scene_vector[lines[i].second.second] += 1;
-      if (max_label == lines[i].second.second){
+      if (max_label_scene == lines[i].second.second){
         accuracy_scene += 1;       
         accuracy_scene_vector[lines[i].second.second] += 1;       
       } else {
-        print_test_score(lines[i].first, lines[i].second.second, max_label, test_score, false);
+        print_test_score(lines[i].first, lines[i].second.second, max_label_scene, test_score, false);
       }  
+      if (lines[i].second.first == -1){
+        count_ignore_object += 1;
+        if (max_label == 6){
+          accuracy_ignore_object += 1;
+        }
+      }
     }
   }
 
-  LOG(INFO) << "Object accuracy: " << accuracy_object / count_object * 1.0 << " " << accuracy_object << " " << count_object;
-  LOG(INFO) << "Scene accuracy: " << accuracy_scene / count_scene * 1.0 << " " << accuracy_scene << " " << count_scene;
+  LOG(INFO) << "Object accuracy: \t\t" << accuracy_object << "\t" << count_object << 
+        "\t" << accuracy_object / count_object * 1.0;
+  LOG(INFO) << "Scene accuracy: \t\t" << accuracy_scene << "\t" << count_scene << 
+        "\t" << accuracy_scene / count_scene * 1.0;
+  LOG(INFO) << "Ignore scene accuracy: \t" << accuracy_ignore_scene << "\t" << count_ignore_scene << 
+      "\t" << accuracy_ignore_scene / count_ignore_scene * 1.0;
+  LOG(INFO) << "Ignore object accuracy: \t" << accuracy_ignore_object << "\t" << count_ignore_object << 
+      "\t" << accuracy_ignore_object / count_ignore_object * 1.0;
   LOG(INFO) << " " ;
+
   for (int i = 0; i < 6; i++){
-    LOG(INFO) << object_name_dict[i] << " accuracy: " << accuracy_object_vector[i] / 
-        count_object_vector[i] * 1.0 << " " << accuracy_object_vector[i] << " " << count_object_vector[i];
+    LOG(INFO) << object_name_dict[i] << " accuracy:\t" << accuracy_object_vector[i] << "\t" << count_object_vector[i]
+        << "\t" << accuracy_object_vector[i] / count_object_vector[i] * 1.0;
   }
   for (int i = 0; i < 2; i++){
-    LOG(INFO) << scene_name_dict[i] << " accuracy: " << accuracy_scene_vector[i] / 
-        count_scene_vector[i] * 1.0 << " " << accuracy_scene_vector[i] << " " << count_scene_vector[i];
+    LOG(INFO) << scene_name_dict[i] << " accuracy:\t" << accuracy_scene_vector[i] << "\t" << count_scene_vector[i]
+        << "\t" << accuracy_scene_vector[i] / count_scene_vector[i] * 1.0 ;
   }
+  LOG(INFO) << data_dir;
 
   return 0;
 }
