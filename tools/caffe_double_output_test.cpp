@@ -151,6 +151,7 @@ int test() {
 
   vector<Blob<float>* > bottom_vec;
   vector<float> test_score;
+  vector<float> test_score_scene;
 
   float accuracy_object = 0;
   float count_object = 0;
@@ -186,13 +187,13 @@ int test() {
       }
     }
 
-    test_score.clear();
+    test_score_scene.clear();
     const float* prob_scene_vec = result[1]->cpu_data();
     float max_prob_scene = MIN_PROB;
     float max_label_scene = -1;
     for (int j = 0; j < result[1]->count(); j++){
       const float score = prob_scene_vec[j];
-      test_score.push_back(score);
+      test_score_scene.push_back(score);
       if (!isnan(score)){
         if (score > max_prob_scene){
           max_prob_scene = score;
@@ -224,7 +225,7 @@ int test() {
         accuracy_scene += 1;       
         accuracy_scene_vector[lines[i].second.second] += 1;       
       } else {
-        print_test_score(lines[i].first, lines[i].second.second, max_label_scene, test_score, false);
+        print_test_score(lines[i].first, lines[i].second.second, max_label_scene, test_score_scene, false);
       }  
       if (lines[i].second.first == -1){
         count_ignore_object += 1;
